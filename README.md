@@ -54,7 +54,7 @@ Si prefieres correr backend y frontend directamente con Node (por ejemplo para t
 cd backend
 cp .env.example .env   # ajusta DATABASE_URL apuntando a tu SQL Server
 npm install
-npx prisma migrate deploy
+npx prisma db push
 npx prisma db seed
 npm run dev
 ```
