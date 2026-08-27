@@ -1,0 +1,128 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: ${{ matrix.service }}/package-lock.json
+
+      - name: Instalar dependencias
+        working-directory: ${{ matrix.service }}
+        run: npm ci
+
+      - name: Ejecutar linter
+        working-directory: ${{ matrix.service }}
+        run: npm run lint
+
+  test:
+    name: Pruebas unitarias
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: ${{ matrix.service }}/package-lock.json
+
+      - name: Instalar dependencias
+        working-directory: ${{ matrix.service }}
+        run: npm ci
+
+      - name: Ejecutar pruebas
+        working-directory: ${{ matrix.service }}
+        run: npm test
+
+  build:
+    name: Construir imágenes Docker
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Construir imagen del backend
+        run: docker build -t promociones-backend:ci ./backend
+
+      - name: Construir imagen del frontend
+        run: docker build -t promociones-frontend:ci ./frontend
+
+  smoke-test:
+    name: Smoke test de integración
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      MSSQL_SA_PASSWORD: ${{ secrets.MSSQL_SA_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verificar variables de entorno requeridas
+        run: |
+          missing=0
+          for var in MSSQL_SA_PASSWORD; do
+            if [ -z "${!var}" ]; then
+              echo "::error::Falta la variable de entorno/secret requerida: $var"
+              missing=1
+            fi
+          done
+          if [ "$missing" -eq 1 ]; then
+            echo "::error::Configura los secrets requeridos en Settings > Secrets and variables > Actions"
+            exit 1
+          fi
+
+      - name: Levantar la aplicación con docker compose
+        run: docker compose up -d --build
+
+      - name: Esperar a que el backend esté saludable
+        run: |
+          echo "Esperando a que /health responda 200..."
+          for i in $(seq 1 30); do
+            status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:${BACKEND_PORT:-4000}/health || echo "000")
+            if [ "$status" = "200" ]; then
+              echo "Backend saludable (intento $i)."
+              exit 0
+            fi
+            echo "Intento $i: status=$status, reintentando..."
+            sleep 5
+          done
+          echo "::error::El endpoint /health no respondió 200 a tiempo"
+          docker compose logs
+          exit 1
+
+      - name: Verificar respuesta final de /health
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:${BACKEND_PORT:-4000}/health)
+          echo "Status recibido: $status"
+          if [ "$status" != "200" ]; then
+            echo "::error::/health no respondió 200 (recibido $status)"
+            docker compose logs
+            exit 1
+          fi
+
+      - name: Logs de los contenedores (para diagnóstico)
+        if: always()
+        run: docker compose logs
+
+      - name: Apagar la aplicación
+        if: always()
+        run: docker compose down -v
