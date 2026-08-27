@@ -20,36 +20,27 @@ model Product {
   @@map("products")
 }
 
-enum PromotionStatus {
-  PROGRAMADA
-  ACTIVA
-  FINALIZADA
-}
-
-enum DiscountType {
-  PORCENTAJE
-  MONTO_FIJO
-}
-
-enum PromotionTarget {
-  PRODUCTO
-  CATEGORIA
-}
+// Nota: SQL Server no soporta el tipo `enum` nativo de Prisma
+// (a diferencia de PostgreSQL). Los siguientes valores se modelan como
+// String y se validan a nivel de aplicación con Zod:
+//   targetType: "PRODUCTO" | "CATEGORIA"
+//   discountType: "PORCENTAJE" | "MONTO_FIJO"
+//   status / fromStatus / toStatus: "PROGRAMADA" | "ACTIVA" | "FINALIZADA"
 
 /// Promoción configurada sobre un producto o una categoría completa.
 model Promotion {
-  id            Int             @id @default(autoincrement())
-  name          String          @db.NVarChar(120)
-  targetType    PromotionTarget @map("target_type")
-  productId     Int?            @map("product_id")
-  categoryName  String?         @map("category_name") @db.NVarChar(80)
-  discountType  DiscountType    @map("discount_type")
-  discountValue Decimal         @map("discount_value") @db.Decimal(10, 2)
-  startDate     DateTime        @map("start_date")
-  endDate       DateTime        @map("end_date")
-  status        PromotionStatus @default(PROGRAMADA)
-  createdAt     DateTime        @default(now()) @map("created_at")
-  updatedAt     DateTime        @updatedAt @map("updated_at")
+  id            Int      @id @default(autoincrement())
+  name          String   @db.NVarChar(120)
+  targetType    String   @map("target_type") @db.NVarChar(20)
+  productId     Int?     @map("product_id")
+  categoryName  String?  @map("category_name") @db.NVarChar(80)
+  discountType  String   @map("discount_type") @db.NVarChar(20)
+  discountValue Decimal  @map("discount_value") @db.Decimal(10, 2)
+  startDate     DateTime @map("start_date")
+  endDate       DateTime @map("end_date")
+  status        String   @default("PROGRAMADA") @db.NVarChar(20)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
   product       Product?              @relation(fields: [productId], references: [id])
   statusHistory PromotionStatusLog[]
@@ -59,11 +50,11 @@ model Promotion {
 
 /// Historial de cambios de estado de una promoción, útil para auditoría.
 model PromotionStatusLog {
-  id           Int             @id @default(autoincrement())
-  promotionId  Int             @map("promotion_id")
-  fromStatus   PromotionStatus? @map("from_status")
-  toStatus     PromotionStatus @map("to_status")
-  changedAt    DateTime        @default(now()) @map("changed_at")
+  id           Int      @id @default(autoincrement())
+  promotionId  Int      @map("promotion_id")
+  fromStatus   String?  @map("from_status") @db.NVarChar(20)
+  toStatus     String   @map("to_status") @db.NVarChar(20)
+  changedAt    DateTime @default(now()) @map("changed_at")
 
   promotion    Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
 
