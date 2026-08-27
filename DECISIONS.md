@@ -39,7 +39,7 @@ Se eligió SQL Server porque es la con la que tengo más experiencia reciente, l
 ## Docker y arranque
 
 - `docker-compose.yml` levanta `db` (SQL Server), un servicio `db-init` de un solo uso que crea la base de datos si no existe (SQL Server no la crea automáticamente como sí hacen Postgres/MySQL), `backend` y `frontend`.
-- El backend corre `prisma migrate deploy` y `prisma db seed` en su entrypoint antes de arrancar el servidor, así que `docker-compose up` deja el sistema listo para usarse sin pasos manuales adicionales.
+- El backend corre `prisma db push` y `prisma db seed` en su entrypoint antes de arrancar el servidor, así que `docker-compose up` deja el sistema listo para usarse sin pasos manuales adicionales.
 - El frontend se sirve con Nginx sobre una imagen `node:20-alpine` usada solo para el build (multi-stage), manteniendo la imagen final liviana.
 
 ## CI/CD y manejo de secretos
